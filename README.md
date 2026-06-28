@@ -28,5 +28,3 @@ and scores candidates using AI.
 - Skill gap analysis
 - Auto-generated interview questions
 - Instant recruiter notification
-
-

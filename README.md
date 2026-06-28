@@ -29,5 +29,4 @@ and scores candidates using AI.
 - Auto-generated interview questions
 - Instant recruiter notification
 
-## Screenshots
-[Add your screenshots here]
+

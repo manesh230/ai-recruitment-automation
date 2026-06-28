@@ -1,0 +1,341 @@
+{
+  "name": "AI Recruitment Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "8921c85c-db6e-4060-b5e1-e1222ebb06aa",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ddd81aaa-ffa3-465c-9909-1f044923f889",
+      "name": "Webhook",
+      "webhookId": "8921c85c-db6e-4060-b5e1-e1222ebb06aa"
+    },
+    {
+      "parameters": {
+        "name": "={{ $now.toFormat('yyyyMMdd_HHmmss') }}_resume.pdf",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1ogMASwlUZeWeIixY5yr3lZI4C_1bKENZ",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        256,
+        0
+      ],
+      "id": "8fd8f273-e588-48d0-abde-b2f8542ea019",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ER6wVBpq8wVrcNxg",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        176
+      ],
+      "id": "5e94812e-ff38-4319-a368-d3c1874de9d5",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a resume parser. Extract information and return ONLY valid JSON with no extra text:\n{\n  \"name\": \"\",\n  \"email\": \"\",\n  \"phone\": \"\",\n  \"skills\": [],\n  \"education\": [],\n  \"experience\": [],\n  \"summary\": \"\"\n}"
+            },
+            {
+              "content": "={{ $json.text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        400,
+        176
+      ],
+      "id": "b55e887e-028f-44bd-8622-01ede8d8bd44",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "JR4xqg7dkly4g7Iy",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.output[0].content[0].text;\nconst parsed = JSON.parse(content);\n\nreturn [\n  {\n    json: parsed\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        176
+      ],
+      "id": "23cc4e99-192f-4fb4-87ed-7dcc3572ba7c",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "useCustomSchema": true,
+        "tableId": "candidates",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{$json.name}}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{$json.email}}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{$json.phone}}"
+            },
+            {
+              "fieldId": "skills",
+              "fieldValue": "={{$json.skills}}"
+            },
+            {
+              "fieldId": "experience",
+              "fieldValue": "={{$json.experience}}"
+            },
+            {
+              "fieldId": "education",
+              "fieldValue": "={{$json.education}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        960,
+        176
+      ],
+      "id": "21196fb5-bc8d-44ed-8308-a23fe2f00815",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "6Xho2Nw2IjdP80Z2",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a recruitment AI. Analyze the candidate profile against the job description.\n\nReturn ONLY this valid JSON, nothing else, no markdown, no explanation:\n{\n  \"match_score\": 75,\n  \"matching_skills\": [\"Python\", \"SQL\"],\n  \"missing_skills\": [\"Machine Learning\"],\n  \"interview_questions\": [\"Question 1?\", \"Question 2?\"],\n  \"recommendation\": \"Your recommendation here\"\n}\n\nRULES:\n- match_score MUST be integer between 0 and 100\n- Do NOT return 0 unless candidate has absolutely no relevant skills\n- matching_skills = skills candidate HAS that match job requirements\n- missing_skills = skills job needs but candidate does NOT have\n- Return ONLY JSON, no other text"
+            },
+            {
+              "content": "=CANDIDATE NAME: {{ $('Code in JavaScript').item.json.name }}\n\nCANDIDATE SKILLS: {{ $('Code in JavaScript').item.json.skills.join(', ') }}\n\nCANDIDATE EXPERIENCE: {{ JSON.stringify($('Code in JavaScript').item.json.experience) }}\n\nCANDIDATE EDUCATION: {{ JSON.stringify($('Code in JavaScript').item.json.education) }}\n\nCANDIDATE SUMMARY: {{ $('Code in JavaScript').item.json.summary }}\n\nJOB DESCRIPTION: We need a Python Developer with skills in Data Analysis, SQL, Machine Learning, Pandas, NumPy, REST APIs. Must have 2+ years experience.\n\nBased on the candidate profile above, provide accurate match score and matching skills."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1168,
+        176
+      ],
+      "id": "1830cc2c-78a6-469c-83c8-4339a18a0e6a",
+      "name": "Message a model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "JR4xqg7dkly4g7Iy",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "manesh100130@gmail.com",
+        "subject": "=Resume Report: {{ $('Code in JavaScript').item.json.name }}",
+        "message": "=<h2>Candidate Report</h2>\n\n<p><b>Name:</b> {{ $('Code in JavaScript').item.json.name }}</p>\n<p><b>Email:</b> {{ $('Code in JavaScript').item.json.email }}</p>\n<p><b>Summary:</b> {{ $('Code in JavaScript').item.json.summary }}</p>\n\n<hr>\n\n<h3>AI Recruitment Score</h3>\n<p><b>Match Score:</b> {{ $('Code1').item.json.match_score }}%</p>\n<p><b>Matching Skills:</b> {{ $('Code1').item.json.matching_skills.join(', ') }}</p>\n<p><b>Missing Skills:</b> {{ $('Code1').item.json.missing_skills.join(', ') }}</p>\n<p><b>Recommendation:</b> {{ $('Code1').item.json.recommendation }}</p>\n\n<h3>Interview Questions:</h3>\n<ol>\n{{ $('Code1').item.json.interview_questions.map(q => '<li>' + q + '</li>').join('') }}\n</ol>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        176
+      ],
+      "id": "08025fad-39d0-456a-b4a1-4cbd145beb02",
+      "name": "Send a message",
+      "webhookId": "1fea3550-7994-4f37-94da-ad588ef2d711",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DswIthbfozAaWE6b",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\n// Correct path for this n8n OpenAI node structure\nconst raw = item.output[0].content[0].text;\n\nconst cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();\nconst parsed = JSON.parse(cleaned);\n\nreturn { json: parsed };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        176
+      ],
+      "id": "1c0306a1-6566-452a-a116-95cdb956af7d",
+      "name": "Code1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        []
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1a5f7305-6fda-4682-9a0c-28199f1d7d40",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fa4dd5be4aa8953c014bf23eece38412d4b568b7f0aede919d52054e6bccfebe"
+  },
+  "nodeGroups": [],
+  "id": "oUkC1qeBYMnNZ8H7",
+  "tags": []
+}
